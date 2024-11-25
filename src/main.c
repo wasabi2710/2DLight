@@ -1,9 +1,6 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_error.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_keyboard.h>
 #include <SDL2/SDL_render.h>
-#include <SDL2/SDL_video.h>
+#include <math.h>
 #include <stdio.h>
 #define WIDTH 1400
 #define HEIGHT 800
@@ -53,7 +50,7 @@ void draw_circle(SDL_Renderer* renderer, float cx, float cy, float r, float angl
         rotate_and_draw(renderer, cx, cy, -y, -x, rad);
     }
     // Draw a line from the center to the edge of the circle
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5)*cos(rad), cy + (r / 1.5)*sin(rad), cx + r * cos(rad), cy + r * sin(rad));
+    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad), cy + (r / 1.5)*sin(rad), cx + r * cos(rad), cy + r * sin(rad));
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + M_PI / 4), cy + (r / 1.5) * sin(rad + M_PI / 4), cx + r * cos(rad + M_PI / 4), cy + r * sin(rad + M_PI / 4));
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + M_PI / 2), cy + (r / 1.5) * sin(rad + M_PI / 2), cx + r * cos(rad + M_PI / 2), cy + r * sin(rad + M_PI / 2));
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 3 * M_PI / 4), cy + (r / 1.5) * sin(rad + 3 * M_PI / 4), cx + r * cos(rad + 3 * M_PI / 4), cy + r * sin(rad + 3 * M_PI / 4));
@@ -61,6 +58,17 @@ void draw_circle(SDL_Renderer* renderer, float cx, float cy, float r, float angl
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 5 * M_PI / 4), cy + (r / 1.5) * sin(rad + 5 * M_PI / 4), cx + r * cos(rad + 5 * M_PI / 4), cy + r * sin(rad + 5 * M_PI / 4));
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 3 * M_PI / 2), cy + (r / 1.5) * sin(rad + 3 * M_PI / 2), cx + r * cos(rad + 3 * M_PI / 2), cy + r * sin(rad + 3 * M_PI / 2));
     SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 7 * M_PI / 4), cy + (r / 1.5) * sin(rad + 7 * M_PI / 4), cx + r * cos(rad + 7 * M_PI / 4), cy + r * sin(rad + 7 * M_PI / 4));
+}
+
+void raycast(SDL_Renderer* renderer, float cx, float cy, float r, float angle, float ray_length) {
+    // convert angle to rad
+    float rad = angle * M_PI / 180.0;
+    // using midpoint alg
+    float circ = 0.f;
+    while (circ <= 360.f) {
+        SDL_RenderDrawLine(renderer, cx + r * cos(rad + circ), cy + r * sin(rad + circ), cx + (r + ray_length) * cos(rad + circ), cy + (r + ray_length) * sin(rad + circ));
+        circ++;
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -88,6 +96,7 @@ int main(int argc, char* argv[]) {
     float radius = 50.0f;
     float rotation_speed = 2.0f;
     float angle = 0.0f;
+    float cx = 500, cy = 500;
 
     // start event loop
     int quit = 0;
@@ -115,8 +124,10 @@ int main(int argc, char* argv[]) {
 
         // render logics
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        draw_circle(renderer, 200, 200, radius, angle);
+        draw_circle(renderer, cx, cy, radius, angle);
+        raycast(renderer, cx, cy, radius, angle, 200);
         angle += rotation_speed * direction;
+        // ray casting
 
         // present the subsequent renderer
         SDL_RenderPresent(renderer);
