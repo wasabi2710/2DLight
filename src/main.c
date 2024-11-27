@@ -6,21 +6,24 @@
 #define HEIGHT 800
 #define DELTA_TIME 1.0f/60.0f;
 
+typedef struct {
+    float x1, y1, x2, y2;
+} Wall;
+
+// Rotate and draw function
 void rotate_and_draw(SDL_Renderer* renderer, float cx, float cy, int x, int y, float rad) {
-    // Rotate the point (x, y) around (cx, cy) by angle rad (in radians)
     float xr = cos(rad) * (x) - sin(rad) * (y) + cx;
     float yr = sin(rad) * (x) + cos(rad) * (y) + cy;
-    // Draw the rotated point
     SDL_RenderDrawPoint(renderer, (int)xr, (int)yr);
 }
+
+// Draw a circle with rotation
 void draw_circle(SDL_Renderer* renderer, float cx, float cy, float r, float angle) {
-    // Convert angle to radians
     float rad = angle * M_PI / 180.0;
-    // Inits
-    int x = 0;
-    int y = r;
-    int p = 1 - r; // Decision parameter
-    // Draw the initial 8 octants
+    int x = 0, y = r;
+    int p = 1 - r;
+
+    // Initial octants
     rotate_and_draw(renderer, cx, cy, x, y, rad);
     rotate_and_draw(renderer, cx, cy, -x, y, rad);
     rotate_and_draw(renderer, cx, cy, x, -y, rad);
@@ -29,17 +32,16 @@ void draw_circle(SDL_Renderer* renderer, float cx, float cy, float r, float angl
     rotate_and_draw(renderer, cx, cy, -y, x, rad);
     rotate_and_draw(renderer, cx, cy, y, -x, rad);
     rotate_and_draw(renderer, cx, cy, -y, -x, rad);
-    // Loop to rasterize the rest
+
     while (x < y) {
         if (p < 0) {
             p = p + 2 * x + 3;
         } else {
             p = p + 2 * (x - y) + 5;
-            y = y - 1;
+            y--;
         }
         x++;
 
-        // Draw the rotated points
         rotate_and_draw(renderer, cx, cy, x, y, rad);
         rotate_and_draw(renderer, cx, cy, -x, y, rad);
         rotate_and_draw(renderer, cx, cy, x, -y, rad);
@@ -49,91 +51,109 @@ void draw_circle(SDL_Renderer* renderer, float cx, float cy, float r, float angl
         rotate_and_draw(renderer, cx, cy, y, -x, rad);
         rotate_and_draw(renderer, cx, cy, -y, -x, rad);
     }
-    // Draw a line from the center to the edge of the circle
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad), cy + (r / 1.5)*sin(rad), cx + r * cos(rad), cy + r * sin(rad));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + M_PI / 4), cy + (r / 1.5) * sin(rad + M_PI / 4), cx + r * cos(rad + M_PI / 4), cy + r * sin(rad + M_PI / 4));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + M_PI / 2), cy + (r / 1.5) * sin(rad + M_PI / 2), cx + r * cos(rad + M_PI / 2), cy + r * sin(rad + M_PI / 2));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 3 * M_PI / 4), cy + (r / 1.5) * sin(rad + 3 * M_PI / 4), cx + r * cos(rad + 3 * M_PI / 4), cy + r * sin(rad + 3 * M_PI / 4));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + M_PI), cy + (r / 1.5) * sin(rad + M_PI), cx + r * cos(rad + M_PI), cy + r * sin(rad + M_PI));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 5 * M_PI / 4), cy + (r / 1.5) * sin(rad + 5 * M_PI / 4), cx + r * cos(rad + 5 * M_PI / 4), cy + r * sin(rad + 5 * M_PI / 4));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 3 * M_PI / 2), cy + (r / 1.5) * sin(rad + 3 * M_PI / 2), cx + r * cos(rad + 3 * M_PI / 2), cy + r * sin(rad + 3 * M_PI / 2));
-    SDL_RenderDrawLine(renderer, cx + (r / 1.5) * cos(rad + 7 * M_PI / 4), cy + (r / 1.5) * sin(rad + 7 * M_PI / 4), cx + r * cos(rad + 7 * M_PI / 4), cy + r * sin(rad + 7 * M_PI / 4));
 }
 
-void raycast(SDL_Renderer* renderer, float cx, float cy, float r, float angle, float ray_length) {
-    // convert angle to rad
+// Multi-wall raycasting function
+void raycast(SDL_Renderer* renderer, float cx, float cy, float angle, float ray_length, Wall* walls, int num_walls) {
     float rad = angle * M_PI / 180.0;
-    // using midpoint alg
-    float circ = 0.f;
-    while (circ <= 360.f) {
-        SDL_RenderDrawLine(renderer, cx + r * cos(rad + circ), cy + r * sin(rad + circ), cx + (r + ray_length) * cos(rad + circ), cy + (r + ray_length) * sin(rad + circ));
-        circ++;
+    float rayDirX = cos(rad);
+    float rayDirY = sin(rad);
+    float closest_t = ray_length;
+    float closest_x = cx + ray_length * rayDirX;
+    float closest_y = cy + ray_length * rayDirY;
+
+    for (int i = 0; i < num_walls; i++) {
+        Wall wall = walls[i];
+        float x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
+        float denom = (x2 - x1) * rayDirY - (y2 - y1) * rayDirX;
+
+        if (denom == 0) continue; // Parallel lines
+
+        float t_num = (cx - x1) * (y2 - y1) - (cy - y1) * (x2 - x1);
+        float s_num = (cx - x1) * rayDirY - (cy - y1) * rayDirX;
+        float t = t_num / denom;
+        float s = s_num / denom;
+
+        if (t >= 0 && t <= closest_t && s >= 0 && s <= 1) {
+            closest_t = t;
+            closest_x = cx + t * rayDirX;
+            closest_y = cy + t * rayDirY;
+        }
     }
+
+    SDL_RenderDrawLine(renderer, cx, cy, closest_x, closest_y);
 }
 
 int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) { // init video
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         printf("Failed initializing SDL lib: %s\n", SDL_GetError());
         return 1;
     }
-    // window creation
-    SDL_Window* window = SDL_CreateWindow("2D Ray", 100, 100, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
+
+    SDL_Window* window = SDL_CreateWindow("2D Raycasting", 100, 100, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
     if (window == NULL) {
         printf("Window creation failed: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
-    // create a renderer
+
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (renderer == NULL) {
-        printf("Window creation failed: %s\n", SDL_GetError());
-        SDL_DestroyRenderer(renderer);
+        printf("Renderer creation failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        SDL_Quit();
         return 1;
     }
 
-    // render properties
-    int direction = 1;
-    float radius = 50.0f;
-    float rotation_speed = 2.0f;
-    float angle = 0.0f;
-    float cx = 500, cy = 500;
-
-    // start event loop
     int quit = 0;
     SDL_Event e;
-    // continuous key state
+    float cx = 500, cy = 500, angle = 0.0f, radius = 50.0f, rotation_speed = 2.0f, ray_length = 1000.0f;
+    int direction = 1;
+
+    Wall walls[] = {
+        {600, 100, 800, 600},
+        {100, 300, 900, 300},
+        {400, 700, 1000, 700},
+    };
+    int num_walls = sizeof(walls) / sizeof(walls[0]);
+
     const Uint8* keystate = SDL_GetKeyboardState(NULL);
+
     while (!quit) {
-        if (SDL_PollEvent(&e) != 0) {
+        while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 quit = 1;
             }
-            // key hold event
-            if (keystate[SDL_SCANCODE_A]) {
-                direction = -1;
-            } else if (keystate[SDL_SCANCODE_D]) {
-                direction = 1;
-            } else {
-                direction = 0;
-            }
         }
 
-        // background
+        if (keystate[SDL_SCANCODE_A]) cx--;
+        if (keystate[SDL_SCANCODE_D]) cx++;
+        if (keystate[SDL_SCANCODE_W]) cy--;
+        if (keystate[SDL_SCANCODE_S]) cy++;
+        if (keystate[SDL_SCANCODE_Q]) angle -= rotation_speed;
+        if (keystate[SDL_SCANCODE_R]) angle += rotation_speed;
+
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        // render logics
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         draw_circle(renderer, cx, cy, radius, angle);
-        raycast(renderer, cx, cy, radius, angle, 200);
-        angle += rotation_speed * direction;
-        // ray casting
 
-        // present the subsequent renderer
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        for (int i = 0; i < num_walls; i++) {
+            SDL_RenderDrawLine(renderer, walls[i].x1, walls[i].y1, walls[i].x2, walls[i].y2);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        int num_rays = 120;
+        for (int i = 0; i < num_rays; i++) {
+            float ray_angle = angle + i * (60.0 / num_rays);
+            raycast(renderer, cx, cy, ray_angle, ray_length, walls, num_walls);
+        }
+
         SDL_RenderPresent(renderer);
     }
 
-    // destroy
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
